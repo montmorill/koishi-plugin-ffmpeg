@@ -56,7 +56,7 @@ export class FFmpegBuilder {
     } else if (type !== 'info') {
       options.push(...[...this.outputOptions, '-'])
     }
-    console.log(options)
+    this.config.debug && console.log(options)
     const child = spawn(this.config.executable, options, { stdio: 'pipe' })
     if (this._input instanceof Buffer) {
       child.stdin.write(this._input)
