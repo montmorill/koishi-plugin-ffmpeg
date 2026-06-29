@@ -15,11 +15,16 @@ interface RunReturn {
   stream: Readable
 }
 
+export interface Config {
+  executable: string
+  debug: boolean
+}
+
 export class FFmpegBuilder {
-  _input: string | Buffer | Readable
+  _input: string | Buffer | Readable | undefined
   inputOptions: string[] = []
   outputOptions: string[] = []
-  constructor(public executable: string) {}
+  constructor(public config: Config) {}
 
   input(path: string): FFmpegBuilder
   input(buffer: Buffer): FFmpegBuilder
@@ -47,11 +52,12 @@ export class FFmpegBuilder {
       options.push(...[...this.inputOptions, '-i', '-'])
     }
     if (type === 'file') {
-      options.push(...[...this.outputOptions, path])
+      options.push(...[...this.outputOptions, path!])
     } else if (type !== 'info') {
       options.push(...[...this.outputOptions, '-'])
     }
-    const child = spawn(this.executable, options, { stdio: 'pipe' })
+    console.log(options)
+    const child = spawn(this.config.executable, options, { stdio: 'pipe' })
     if (this._input instanceof Buffer) {
       child.stdin.write(this._input)
       child.stdin.end()
@@ -64,11 +70,15 @@ export class FFmpegBuilder {
       return child.stdout as any
     } else {
       return new Promise<void | Buffer>((resolve, reject) => {
-        child.stdin.on('error', function (err) {
-          if (!['ECONNRESET', 'EPIPE', 'EOF'].includes(err['code'])) reject(err)
+        child.stdin.on('error', function (err: any) {
+          if (!['ECONNRESET', 'EPIPE', 'EOF'].includes(err.code)) reject(err)
         })
+        if (this.config.debug) {
+          child.stdout.on('data', data => console.log(data.toString()))
+          child.stderr.on('data', data => console.error(data.toString()))
+        }
         child.on('error', reject)
-        let stream: Readable
+        let stream: Readable | undefined
         if (type === 'file') {
           child.on('exit', code => code === 0 ? resolve() : reject(new Error(`exited with ${code}`)))
         } else if (type === 'buffer') {
@@ -77,7 +87,7 @@ export class FFmpegBuilder {
           stream = child.stderr
         }
         if (stream) {
-          const buffer = []
+          const buffer: Buffer[] = []
           stream.on('data', data => buffer.push(data))
           stream.on('end', () => resolve(Buffer.concat(buffer)))
           stream.on('error', reject)
@@ -88,11 +98,11 @@ export class FFmpegBuilder {
 }
 
 export class FFmpeg extends Service {
-  constructor(ctx: Context, public executable: string) {
+  constructor(ctx: Context, public config: Config) {
     super(ctx, 'ffmpeg')
   }
 
   builder() {
-    return new FFmpegBuilder(this.executable)
+    return new FFmpegBuilder(this.config)
   }
 }

@@ -11,17 +11,23 @@ const arch = os.arch()
 
 export const name = 'ffmpeg'
 
-export const Config = Schema.object({})
+export interface Config {
+  debug: boolean
+}
+
+export const Config: Schema<Config> = Schema.object({
+  debug: Schema.boolean().default(false).description('开启调试模式'),
+})
 
 export const inject = ['downloads']
 
-export async function apply(ctx: Context) {
+export async function apply(ctx: Context, config: Config) {
   const task = ctx.downloads.nereid('ffmpeg', [
     `npm://@koishijs-assets/ffmpeg?registry=${await registry()}`
   ], bucket())
   const path = await task.promise
   const executable = platform === 'win32' ? `${path}/ffmpeg.exe` : `${path}/ffmpeg`
-  ctx.plugin(FFmpeg, executable)
+  ctx.plugin(FFmpeg, { executable, ...config })
 }
 
 function bucket() {
